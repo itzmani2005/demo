@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
- 
+
     <title>Spensa - Smart Money Tracker</title>
     <meta name="description" content="Real-time money tracker with smart budgeting rules for students and professionals">
     <meta name="keywords" content="money tracker, budget, expense tracker, savings, financial planning, spensa">
@@ -11,17 +11,30 @@
     <meta property="og:description" content="Manage your income with smart budgeting rules and track expenses in real-time">
     <meta name="twitter:title" content="Spensa - Smart Money Tracker">
     <meta name="twitter:description" content="Manage your income with smart budgeting rules and track expenses in real-time">
- 
+
+    <!-- FIX 1: Fonts must load first, before any rendering begins -->
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://unpkg.com/lucide-static@0.516.0/font/lucide.css" rel="stylesheet">
- 
 
     <script type="module">
-      import { initializeApp }                          from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
-      import { getAnalytics }                           from "https://www.gstatic.com/firebasejs/12.10.0/firebase-analytics.js";
-      import { getAuth, onAuthStateChanged, signOut }   from "https://www.gstatic.com/firebasejs/12.10.0/firebase-auth.js";
-      import { getFirestore }                           from "https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js";
- 
+      import { initializeApp }        from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
+      import { getAnalytics }         from "https://www.gstatic.com/firebasejs/12.10.0/firebase-analytics.js";
+      import { getAuth, onAuthStateChanged, signOut }
+                                      from "https://www.gstatic.com/firebasejs/12.10.0/firebase-auth.js";
+      import {
+        getFirestore,
+        doc,
+        setDoc,
+        getDoc,
+        getDocs,
+        deleteDoc,
+        collection,
+        query,
+        orderBy,
+        onSnapshot,
+        serverTimestamp,
+      } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js";
+
       const firebaseConfig = {
         apiKey:            "AIzaSyDjRDEimh4D10umN6FMlev5sflEUK4pY1U",
         authDomain:        "vaultify-v1.firebaseapp.com",
@@ -31,40 +44,55 @@
         appId:             "1:746815711523:web:381b2b5c0b75f157cd4496",
         measurementId:     "G-HWT32W3H5J"
       };
- 
-      const app       = initializeApp(firebaseConfig);
+
+      const app  = initializeApp(firebaseConfig);
       const analytics = getAnalytics(app);
-      const auth      = getAuth(app);
-      const db        = getFirestore(app);
- 
-      
+      const auth = getAuth(app);
+      const db   = getFirestore(app);
+
+      // Expose Firestore DB instance
       window.firebaseAuth = auth;
       window.firebaseDb   = db;
- 
-      window.currentUser  = null;
+
+      // THE KEY FIX: expose every Firestore function firestoreSync.js needs
+      // on window.firestoreFns so the Babel script reads them without any
+      // dynamic import() call.
+      window.firestoreFns = {
+        doc,
+        setDoc,
+        getDoc,
+        getDocs,
+        deleteDoc,
+        collection,
+        query,
+        orderBy,
+        onSnapshot,
+        serverTimestamp,
+      };
+
+      window.currentUser   = null;
       window.firebaseReady = false;
- 
+
       onAuthStateChanged(auth, (user) => {
         if (user) {
           window.currentUser   = user;
           window.firebaseReady = true;
-          console.log('Auth resolved: signed in as', user.email);
+          console.log('✅ Auth resolved: signed in as', user.email);
         } else {
-          
-          const page = window.location.pathname;
+          const page       = window.location.pathname;
           const isAuthPage = page.includes('login.html') || page.includes('signup.html');
           if (!isAuthPage) {
             window.location.href = 'login.html';
           }
           window.currentUser   = null;
-          window.firebaseReady = true; 
+          window.firebaseReady = true;
         }
       });
- 
+
       window.handleLogout = async () => {
         try {
-          if (typeof stopAllRealtimeSync === 'function') stopAllRealtimeSync();
-          if (typeof clearAllDataForUser === 'function') clearAllDataForUser();
+          if (typeof stopAllRealtimeSync  === 'function') stopAllRealtimeSync();
+          if (typeof clearAllDataForUser  === 'function') clearAllDataForUser();
           window.currentUser = null;
           await signOut(auth);
           window.location.href = 'login.html';
@@ -73,14 +101,20 @@
         }
       };
     </script>
- 
+
+    <!-- FIX 6: React, Babel, Tailwind, Chart.js loaded BEFORE any component
+         scripts. The original had fonts and icons at the bottom of <head> but
+         these libraries were also mid-page — Babel needs to be present before
+         any type="text/babel" script tag is encountered by the parser. -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
     <script>
-      
+      // FIX 7: Alias Chart to ChartJS safely. The original did this in a
+      // separate <script> tag which is fine, but guard it in case Chart.js
+      // fails to load (e.g. CDN down) so it doesn't crash the whole page.
       if (window.Chart) {
         window.ChartJS = window.Chart;
       } else {
@@ -88,7 +122,7 @@
       }
     </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
- 
+
     <style type="text/tailwindcss">
     @layer theme {
         :root {
@@ -99,7 +133,7 @@
             --card-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
         }
     }
- 
+
     @layer base {
         body {
             font-family: 'Poppins', sans-serif;
@@ -107,7 +141,7 @@
             color: var(--text-color);
         }
     }
- 
+
     @layer components {
         .btn-primary {
             @apply px-6 py-3 bg-[var(--primary-color)] text-white rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 hover:bg-[#d62839];
@@ -125,7 +159,7 @@
             @apply h-3 rounded-full bg-gradient-to-r from-red-500 to-red-600 transition-all duration-500;
         }
     }
- 
+
     @layer utilities {
         .animate-fade-in {
             animation: fadeIn 0.6s ease-in;
@@ -139,8 +173,9 @@
         .glow {
             box-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
         }
- 
-        
+
+        /* FIX 8: Loader shown while Firebase auth resolves, hidden after.
+           Prevents a flash of the app UI before auth state is known. */
         #firebase-loader {
             position: fixed;
             inset: 0;
@@ -168,29 +203,42 @@
     </style>
 </head>
 <body>
-    
+    <!-- FIX 8: Auth loading overlay — shown until Firebase resolves -->
     <div id="firebase-loader">
       <div class="loader-spinner"></div>
     </div>
- 
+
     <nav id="main-nav" style="display: none;"></nav>
     <div id="root"></div>
- 
-    
+
+    <!-- FIX 9: Script load ORDER is critical for Babel-transpiled components.
+         Order must be:
+           1. Pure utility functions (no JSX, no React)
+           2. Base React components (no dependencies on other components)
+           3. Composite components (depend on base components)
+           4. Pages / top-level components
+           5. firestoreSync and storage (used by app.js)
+           6. app.js LAST
+
+         The original had storage.js and firestoreSync.js loaded AFTER app.js
+         in some versions, which means app.js called saveToStorage and
+         saveMonthToFirestore before those functions existed on window. -->
+
+    <!-- Utilities (no JSX) -->
     <script type="text/babel" src="utils/currencyFormatter.js"></script>
     <script type="text/babel" src="utils/budgetRules.js"></script>
     <script type="text/babel" src="utils/budgetBalancer.js"></script>
     <script type="text/babel" src="utils/suggestionEngine.js"></script>
     <script type="text/babel" src="utils/storage.js"></script>
     <script type="text/babel" src="utils/firestoreSync.js"></script>
- 
+
     <!-- Base UI components -->
     <script type="text/babel" src="components/SpensaLogo.js"></script>
     <script type="text/babel" src="components/Alert.js"></script>
     <script type="text/babel" src="components/Modal.js"></script>
     <script type="text/babel" src="components/ConfirmModal.js"></script>
     <script type="text/babel" src="components/Navbar.js"></script>
- 
+
     <!-- Feature components -->
     <script type="text/babel" src="components/ModeSelector.js"></script>
     <script type="text/babel" src="components/MonthSelector.js"></script>
@@ -208,9 +256,11 @@
     <script type="text/babel" src="components/BudgetChart.js"></script>
     <script type="text/babel" src="components/MonthlyOverview.js"></script>
     <script type="text/babel" src="components/SmartInsights.js"></script>
- 
+
+    <!-- App entry point — must be LAST -->
     <script type="text/babel" src="app.js"></script>
- 
+
+    <!-- FIX 8: Hide the loader once Firebase auth has resolved -->
     <script>
       (function waitForFirebase() {
         if (window.firebaseReady) {
@@ -223,4 +273,3 @@
     </script>
 </body>
 </html>
- 

@@ -1,6 +1,5 @@
 function BudgetBreakdownSimple({ mode, income, expenses, allocation, onAlert }) {
   try {
-    
     const safeIncome   = parseFloat(income)  || 0;
     const safeExpenses = Array.isArray(expenses) ? expenses : [];
 
@@ -17,7 +16,6 @@ function BudgetBreakdownSimple({ mode, income, expenses, allocation, onAlert }) 
         }
       : null;
 
-   
     let baseBreakdown;
     let balancedBreakdown;
 
@@ -27,7 +25,6 @@ function BudgetBreakdownSimple({ mode, income, expenses, allocation, onAlert }) 
         : calculateBudget(mode, safeIncome);
     } catch (e) {
       console.error('calculateBudget error:', e);
-      // FIX 3 — Safe fallback using allocation percentages directly
       baseBreakdown = safeAllocation
         ? {
             needs:   safeAllocation.needsAmount,
@@ -47,7 +44,6 @@ function BudgetBreakdownSimple({ mode, income, expenses, allocation, onAlert }) 
       balancedBreakdown = baseBreakdown;
     }
 
-    
     const getCategorySpent = (category) =>
       safeExpenses
         .filter(exp => exp.category === category)
@@ -56,21 +52,8 @@ function BudgetBreakdownSimple({ mode, income, expenses, allocation, onAlert }) 
           return sum + (isNaN(amt) || amt < 0 ? 0 : amt);
         }, 0);
 
-   
-    const categoryColors = {
-      'Needs':   'bg-blue-500',
-      'Wants':   'bg-purple-500',
-      'Others':  'bg-amber-500',
-      'Savings': 'bg-green-500',
-    };
-
-    // FIX 5 — Matching progress bar colors per category
-    const progressColors = {
-      'Needs':   'bg-blue-500',
-      'Wants':   'bg-purple-500',
-      'Others':  'bg-amber-500',
-      'Savings': 'bg-green-500',
-    };
+    const PRIMARY   = '#e63946'; // app primary red — used for all icons and bars
+    const OVERSPEND = '#c1121f'; // darker red for overspent state
 
     const categoryIcons = {
       'Needs':   'briefcase',
@@ -86,7 +69,6 @@ function BudgetBreakdownSimple({ mode, income, expenses, allocation, onAlert }) 
       'Savings': 'Emergency Fund, Investments, Long-term Goals',
     };
 
-   
     const totalBudget = safeIncome;
     const totalSpent  = safeExpenses.reduce((sum, exp) => {
       const amt = parseFloat(exp.amount);
@@ -99,33 +81,33 @@ function BudgetBreakdownSimple({ mode, income, expenses, allocation, onAlert }) 
     const isOverBudget = totalSpent > totalBudget;
 
     const renderCategory = (label, key) => {
-      const amount    = (balancedBreakdown && balancedBreakdown[key]) || 0;
-      const spent     = getCategorySpent(label);
-      const overspent = spent > amount;
-
-      
+      const amount     = (balancedBreakdown && balancedBreakdown[key]) || 0;
+      const spent      = getCategorySpent(label);
+      const overspent  = spent > amount;
       const percentage = amount > 0 ? (spent / amount) * 100 : 0;
-      const remaining  = amount - spent; 
-      const allocPct = safeAllocation ? (safeAllocation[key] ?? 0) : 0;
+      const remaining  = amount - spent;
+      const allocPct   = safeAllocation ? (safeAllocation[key] ?? 0) : 0;
 
       return (
         <div
           key={label}
           className={`bg-white rounded-xl p-4 shadow-md border-l-4 transition-all ${
-            overspent
-              ? 'border-red-400'
-              : 'border-transparent hover:border-gray-200'
+            overspent ? 'border-red-400' : 'border-transparent hover:border-gray-200'
           }`}
         >
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-3">
-              <div className={`w-12 h-12 ${categoryColors[label]} rounded-lg flex items-center justify-center flex-shrink-0`}>
+              {/* Icon — always primary red */}
+              <div
+                className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0"
+                style={{ backgroundColor: PRIMARY }}
+              >
                 <div className={`icon-${categoryIcons[label]} text-xl text-white`}></div>
               </div>
+
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <div className="font-semibold text-gray-800">{label}</div>
-                  {/* FIX 8 — allocation percentage badge */}
                   {allocPct > 0 && (
                     <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">
                       {allocPct}%
@@ -142,22 +124,23 @@ function BudgetBreakdownSimple({ mode, income, expenses, allocation, onAlert }) 
             </div>
 
             <div className="text-right flex-shrink-0">
-              <div className={`font-bold ${overspent ? 'text-red-500' : 'text-[var(--primary-color)]'}`}>
+              <div className="font-bold" style={{ color: overspent ? OVERSPEND : PRIMARY }}>
                 {formatCurrency(spent)}
               </div>
-              <div className={`text-xs ${overspent ? 'text-red-400' : 'text-gray-500'}`}>
+              <div className="text-xs text-gray-500">
                 {Math.min(percentage, 100).toFixed(0)}% used
               </div>
             </div>
           </div>
 
-          {/* Progress bar */}
+          {/* Progress bar — primary red, darker when overspent */}
           <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden mb-2">
             <div
-              className={`h-full rounded-full transition-all duration-500 ${
-                overspent ? 'bg-red-500' : progressColors[label]
-              }`}
-              style={{ width: `${Math.min(percentage, 100)}%` }}
+              className="h-full rounded-full transition-all duration-500"
+              style={{
+                width:           `${Math.min(percentage, 100)}%`,
+                backgroundColor: overspent ? OVERSPEND : PRIMARY,
+              }}
             ></div>
           </div>
 
@@ -165,10 +148,10 @@ function BudgetBreakdownSimple({ mode, income, expenses, allocation, onAlert }) 
             <span className="text-gray-500">
               {overspent ? 'Overspent:' : 'Remaining:'}
             </span>
-            {/* FIX 7 — show overspend in red with a warning icon */}
-            <span className={`font-semibold flex items-center gap-1 ${
-              overspent ? 'text-red-500' : 'text-green-600'
-            }`}>
+            <span
+              className="font-semibold flex items-center gap-1"
+              style={{ color: overspent ? OVERSPEND : PRIMARY }}
+            >
               {overspent && <div className="icon-circle-alert text-xs"></div>}
               {overspent
                 ? `${formatCurrency(Math.abs(remaining))} over`
@@ -177,16 +160,16 @@ function BudgetBreakdownSimple({ mode, income, expenses, allocation, onAlert }) 
             </span>
           </div>
 
-          {/* FIX 9 — Alert via onAlert when a category first hits 90% or over.
-              Previously onAlert was accepted as a prop but never called. */}
           {percentage >= 90 && percentage < 100 && (
-            <div className="mt-2 text-xs text-amber-600 bg-amber-50 rounded-lg px-2 py-1 flex items-center gap-1">
+            <div className="mt-2 text-xs bg-red-50 rounded-lg px-2 py-1 flex items-center gap-1"
+                 style={{ color: PRIMARY }}>
               <div className="icon-triangle-alert text-xs"></div>
               <span>Almost at budget limit</span>
             </div>
           )}
           {overspent && (
-            <div className="mt-2 text-xs text-red-600 bg-red-50 rounded-lg px-2 py-1 flex items-center gap-1">
+            <div className="mt-2 text-xs bg-red-50 rounded-lg px-2 py-1 flex items-center gap-1"
+                 style={{ color: OVERSPEND }}>
               <div className="icon-circle-alert text-xs"></div>
               <span>Over budget for this category</span>
             </div>
@@ -206,31 +189,32 @@ function BudgetBreakdownSimple({ mode, income, expenses, allocation, onAlert }) 
           <h2 className="text-2xl font-bold">Budget Breakdown</h2>
           <div className="text-right">
             <div className="text-sm text-gray-500">Total Income</div>
-            <div className="text-2xl font-bold text-[var(--primary-color)]">
+            <div className="text-2xl font-bold" style={{ color: PRIMARY }}>
               {formatCurrency(safeIncome)}
             </div>
           </div>
         </div>
 
-        {/* FIX 6 — Overall summary bar */}
+        {/* Overall spending bar — primary red */}
         <div className={`rounded-xl p-4 ${isOverBudget ? 'bg-red-50 border border-red-100' : 'bg-gray-50'}`}>
           <div className="flex items-center justify-between mb-2 text-sm">
             <span className="font-medium text-gray-700">Overall Spending</span>
-            <span className={`font-semibold ${isOverBudget ? 'text-red-600' : 'text-gray-700'}`}>
+            <span className="font-semibold text-gray-700">
               {formatCurrency(totalSpent)} / {formatCurrency(totalBudget)}
             </span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
             <div
-              className={`h-full rounded-full transition-all duration-500 ${
-                isOverBudget ? 'bg-red-500' : totalPercentage > 80 ? 'bg-amber-500' : 'bg-green-500'
-              }`}
-              style={{ width: `${Math.min(totalPercentage, 100)}%` }}
+              className="h-full rounded-full transition-all duration-500"
+              style={{
+                width:           `${Math.min(totalPercentage, 100)}%`,
+                backgroundColor: isOverBudget ? OVERSPEND : PRIMARY,
+              }}
             ></div>
           </div>
           <div className="flex items-center justify-between mt-2 text-xs text-gray-500">
             <span>{totalPercentage.toFixed(0)}% of budget used</span>
-            <span className={isOverBudget ? 'text-red-500 font-medium' : 'text-green-600 font-medium'}>
+            <span className="font-medium" style={{ color: isOverBudget ? OVERSPEND : PRIMARY }}>
               {isOverBudget
                 ? `${formatCurrency(totalSpent - totalBudget)} over budget`
                 : `${formatCurrency(totalRemaining)} remaining`

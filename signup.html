@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign Up - Spensa</title>
+
+    <!-- FIX 1: Fonts and icons first, before any rendering -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://unpkg.com/lucide-static@0.516.0/font/lucide.css" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style type="text/tailwindcss">
+    @layer theme {
+        :root {
+            --primary-color: #e63946;
+            --accent-color: #f5f5f5;
+        }
+    }
+    @layer base {
+        body { font-family: 'Poppins', sans-serif; }
+    }
+    @layer utilities {
+        .animate-fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(16px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        /* FIX 2: Loader while Firebase checks existing session */
+        #auth-loader {
+            position: fixed; inset: 0;
+            display: flex; align-items: center; justify-content: center;
+            background: #fff; z-index: 9999;
+            transition: opacity 0.3s ease;
+        }
+        #auth-loader.hidden { opacity: 0; pointer-events: none; }
+        .spinner {
+            width: 36px; height: 36px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #e63946;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen flex items-center justify-center p-4">
+
+    <!-- FIX 2: Spinner shown while checking if user is already signed in -->
+    <div id="auth-loader"><div class="spinner"></div></div>
+
+    <div id="root"></div>
+
+    <script type="module">
+      import { initializeApp }                                          from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
+      import { getAuth, onAuthStateChanged,
+               createUserWithEmailAndPassword,
+               updateProfile,
+               signInWithPopup, GoogleAuthProvider }                   from "https://www.gstatic.com/firebasejs/12.10.0/firebase-auth.js";
+      import { getFirestore, doc, setDoc, getDoc, serverTimestamp }   from "https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js";
+
+      const firebaseConfig = {
+        apiKey:            "AIzaSyDjRDEimh4D10umN6FMlev5sflEUK4pY1U",
+        authDomain:        "vaultify-v1.firebaseapp.com",
+        projectId:         "vaultify-v1",
+        storageBucket:     "vaultify-v1.firebasestorage.app",
+        messagingSenderId: "746815711523",
+        appId:             "1:746815711523:web:381b2b5c0b75f157cd4496",
+        measurementId:     "G-HWT32W3H5J"
+      };
+
+      const app  = initializeApp(firebaseConfig);
+      const auth = getAuth(app);
+      const db   = getFirestore(app);
+
+      // ── FIX 3: Check existing session first ──────────────────────────────
+      // Original called renderSignupPage() unconditionally at the bottom,
+      // so a user who was already signed in would see the signup form flash
+      // before being redirected. Now we check auth state first.
+      let authChecked = false;
+      onAuthStateChanged(auth, (user) => {
+        if (!authChecked) {
+          authChecked = true;
+          const loader = document.getElementById('auth-loader');
+          if (user) {
+            // Already signed in — go straight to the app
+            window.location.href = 'index.html';
+          } else {
+            if (loader) loader.classList.add('hidden');
+            renderSignupPage();
+          }
+        }
+      });
+
+      // ── Helpers ───────────────────────────────────────────────────────────
+
+      // FIX 4: Friendly error messages instead of raw Firebase error strings
+      function showError(message) {
+        const friendly = {
+          'auth/email-already-in-use':   'An account with this email already exists. Try logging in instead.',
+          'auth/invalid-email':          'Please enter a valid email address.',
+          'auth/weak-password':          'Password must be at least 6 characters.',
+          'auth/network-request-failed': 'Network error. Check your connection and try again.',
+          'auth/popup-closed-by-user':   'Sign-up popup was closed. Please try again.',
+          'auth/cancelled-popup-request':'Another sign-in is already in progress.',
+          'auth/too-many-requests':      'Too many attempts. Please wait a moment and try again.',
+        };
+        const codeMatch = message.match(/\(([^)]+)\)/);
+        const code      = codeMatch ? codeMatch[1] : '';
+        const display   = friendly[code] || message;
+
+        const errorDiv = document.getElementById('error-message');
+        if (errorDiv) {
+          errorDiv.textContent = display;
+          errorDiv.classList.remove('hidden');
+        }
+      }
+
+      function hideError() {
+        const errorDiv = document.getElementById('error-message');
+        if (errorDiv) errorDiv.classList.add('hidden');
+      }
+
+      // FIX 5: Centralised button loading state with proper spinner
+      const GOOGLE_LABEL = `
+        <svg width="18" height="18" viewBox="0 0 24 24" style="flex-shrink:0">
+          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+        </svg>
+        <span>Sign up with Google</span>`;
+
+      function setButtonLoading(btnId, loading, defaultHTML) {
+        const btn = document.getElementById(btnId);
+        if (!btn) return;
+        btn.disabled = loading;
+        btn.innerHTML = loading
+          ? `<div class="flex items-center justify-center gap-2">
+               <div class="spinner" style="width:18px;height:18px;border-width:2px"></div>
+               <span>Please wait…</span>
+             </div>`
+          : defaultHTML;
+      }
+
+      // ── FIX 6: Client-side validation ────────────────────────────────────
+      // Original sent empty/invalid values straight to Firebase, wasting a
+      // round-trip and returning confusing error messages.
+      function validateSignupForm(name, email, password, confirmPassword) {
+        if (!name.trim()) {
+          showError('Please enter your name.'); return false;
+        }
+        if (name.trim().length < 2) {
+          showError('Name must be at least 2 characters.'); return false;
+        }
+        if (!email.trim()) {
+          showError('Please enter your email address.'); return false;
+        }
+        if (!password) {
+          showError('Please create a password.'); return false;
+        }
+        if (password.length < 6) {
+          showError('Password must be at least 6 characters.'); return false;
+        }
+        // FIX 7: Confirm password field was completely missing in the original.
+        // A typo in the password would lock users out of their account.
+        if (password !== confirmPassword) {
+          showError('Passwords do not match. Please try again.'); return false;
+        }
+        return true;
+      }
+
+      // ── FIX 8: Centralised profile creation ──────────────────────────────
+      // Both email and Google signup use the same function.
+      // Does NOT store mode/income — those belong in the months sub-collection.
+      async function createUserProfile(user, displayName) {
+        await setDoc(doc(db, 'users', user.uid), {
+          name:      displayName || user.displayName || '',
+          email:     user.email  || '',
+          createdAt: serverTimestamp(),
+        });
+      }
+
+      // ── FIX 9: Redirect after auth state confirmed ────────────────────────
+      // Original redirected immediately after signInWithPopup / createUser
+      // resolved. index.html's onAuthStateChanged hadn't fired yet at that
+      // point, so it saw no user and redirected back — causing a loop.
+      function redirectAfterSignup() {
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+          if (user) {
+            unsubscribe();
+            window.location.href = 'index.html';
+          }
+        });
+      }
+
+      // ── Email signup ──────────────────────────────────────────────────────
+      async function handleEmailSignup(name, email, password, confirmPassword) {
+        hideError();
+
+        // FIX 6 & 7: Validate before touching Firebase
+        if (!validateSignupForm(name, email, password, confirmPassword)) return;
+
+        setButtonLoading('signup-btn', true, 'Create Account');
+        try {
+          const credential = await createUserWithEmailAndPassword(auth, email, password);
+          const user       = credential.user;
+
+          // FIX 10: Set displayName on the Firebase Auth profile so it
+          // appears in user.displayName throughout the app. Original only
+          // stored the name in Firestore but left auth profile nameless.
+          await updateProfile(user, { displayName: name.trim() });
+
+          // Create Firestore user document
+          await createUserProfile(user, name.trim());
+
+          // FIX 9: Wait for auth state to confirm before redirecting
+          redirectAfterSignup();
+        } catch (error) {
+          showError(error.message);
+          setButtonLoading('signup-btn', false, 'Create Account');
+        }
+      }
+
+      // ── Google signup ─────────────────────────────────────────────────────
+      async function handleGoogleSignup() {
+        hideError();
+        setButtonLoading('google-btn', true, GOOGLE_LABEL);
+        try {
+          const provider = new GoogleAuthProvider();
+          const result   = await signInWithPopup(auth, provider);
+          const user     = result.user;
+
+          // Only create profile if this is a brand new user
+          const userSnap = await getDoc(doc(db, 'users', user.uid));
+          if (!userSnap.exists()) {
+            await createUserProfile(user, user.displayName);
+          }
+
+          // FIX 9: Wait for auth state confirmation before redirecting
+          redirectAfterSignup();
+        } catch (error) {
+          showError(error.message);
+          setButtonLoading('google-btn', false, GOOGLE_LABEL);
+        }
+      }
+
+      // ── Render ────────────────────────────────────────────────────────────
+      function renderSignupPage() {
+        document.getElementById('root').innerHTML = `
+          <div class="max-w-md w-full animate-fade-in">
+            <div class="bg-white rounded-2xl p-8 shadow-2xl">
+
+              <div class="flex items-center justify-center mb-6">
+                <img src="https://app.trickle.so/storage/public/images/usr_173f09e758000001/227f35e7-5ab9-4689-9b04-01b138000659.png"
+                     alt="Spensa Logo" class="w-20 h-20 object-contain">
+              </div>
+
+              <h1 class="text-3xl font-bold text-center mb-2">Create Account</h1>
+              <p class="text-center text-gray-600 mb-8">Sign up to start using Spensa</p>
+
+              <div id="error-message" class="hidden bg-red-50 border-2 border-red-200 text-red-800 rounded-xl p-3 mb-4 text-sm"></div>
+
+              <form id="signup-form" class="space-y-4" novalidate>
+                <div>
+                  <label class="block text-sm font-medium mb-2" for="name">Name</label>
+                  <input type="text" id="name" required autocomplete="name"
+                    class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-[var(--primary-color)] focus:outline-none transition-colors"
+                    placeholder="Enter your name">
+                </div>
+
+                <div>
+                  <label class="block text-sm font-medium mb-2" for="email">Email</label>
+                  <input type="email" id="email" required autocomplete="email"
+                    class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-[var(--primary-color)] focus:outline-none transition-colors"
+                    placeholder="Enter your email">
+                </div>
+
+                <div>
+                  <label class="block text-sm font-medium mb-2" for="password">Password</label>
+                  <input type="password" id="password" required autocomplete="new-password"
+                    class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-[var(--primary-color)] focus:outline-none transition-colors"
+                    placeholder="Create a password (min. 6 characters)">
+                </div>
+
+                <!-- FIX 7: Confirm password field added -->
+                <div>
+                  <label class="block text-sm font-medium mb-2" for="confirm-password">Confirm Password</label>
+                  <input type="password" id="confirm-password" required autocomplete="new-password"
+                    class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-[var(--primary-color)] focus:outline-none transition-colors"
+                    placeholder="Re-enter your password">
+                </div>
+
+                <button type="submit" id="signup-btn"
+                  class="w-full px-6 py-3 bg-[var(--primary-color)] text-white rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100">
+                  Create Account
+                </button>
+              </form>
+
+              <div class="relative my-6">
+                <div class="absolute inset-0 flex items-center">
+                  <div class="w-full border-t border-gray-200"></div>
+                </div>
+                <div class="relative flex justify-center text-sm">
+                  <span class="px-3 bg-white text-gray-500">Or continue with</span>
+                </div>
+              </div>
+
+              <button id="google-btn"
+                class="w-full px-6 py-3 bg-white border-2 border-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed">
+                <svg width="18" height="18" viewBox="0 0 24 24" style="flex-shrink:0">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                </svg>
+                <span>Sign up with Google</span>
+              </button>
+
+              <p class="text-center text-sm text-gray-600 mt-6">
+                Already have an account?
+                <a href="login.html" class="text-[var(--primary-color)] font-medium hover:underline">Login</a>
+              </p>
+            </div>
+          </div>
+        `;
+
+        document.getElementById('signup-form').addEventListener('submit', (e) => {
+          e.preventDefault();
+          // FIX 6: Trim inputs before validation and Firebase calls
+          const name            = document.getElementById('name').value.trim();
+          const email           = document.getElementById('email').value.trim();
+          const password        = document.getElementById('password').value;
+          const confirmPassword = document.getElementById('confirm-password').value;
+          handleEmailSignup(name, email, password, confirmPassword);
+        });
+
+        document.getElementById('google-btn').addEventListener('click', handleGoogleSignup);
+      }
+    </script>
+</body>
+</html>

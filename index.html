@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ 
+    <title>Spensa - Smart Money Tracker</title>
+    <meta name="description" content="Real-time money tracker with smart budgeting rules for students and professionals">
+    <meta name="keywords" content="money tracker, budget, expense tracker, savings, financial planning, spensa">
+    <meta property="og:title" content="Spensa - Smart Money Tracker">
+    <meta property="og:description" content="Manage your income with smart budgeting rules and track expenses in real-time">
+    <meta name="twitter:title" content="Spensa - Smart Money Tracker">
+    <meta name="twitter:description" content="Manage your income with smart budgeting rules and track expenses in real-time">
+ 
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://unpkg.com/lucide-static@0.516.0/font/lucide.css" rel="stylesheet">
+ 
+
+    <script type="module">
+      import { initializeApp }                          from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
+      import { getAnalytics }                           from "https://www.gstatic.com/firebasejs/12.10.0/firebase-analytics.js";
+      import { getAuth, onAuthStateChanged, signOut }   from "https://www.gstatic.com/firebasejs/12.10.0/firebase-auth.js";
+      import { getFirestore }                           from "https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js";
+ 
+      const firebaseConfig = {
+        apiKey:            "AIzaSyDjRDEimh4D10umN6FMlev5sflEUK4pY1U",
+        authDomain:        "vaultify-v1.firebaseapp.com",
+        projectId:         "vaultify-v1",
+        storageBucket:     "vaultify-v1.firebasestorage.app",
+        messagingSenderId: "746815711523",
+        appId:             "1:746815711523:web:381b2b5c0b75f157cd4496",
+        measurementId:     "G-HWT32W3H5J"
+      };
+ 
+      const app       = initializeApp(firebaseConfig);
+      const analytics = getAnalytics(app);
+      const auth      = getAuth(app);
+      const db        = getFirestore(app);
+ 
+      
+      window.firebaseAuth = auth;
+      window.firebaseDb   = db;
+ 
+      window.currentUser  = null;
+      window.firebaseReady = false;
+ 
+      onAuthStateChanged(auth, (user) => {
+        if (user) {
+          window.currentUser   = user;
+          window.firebaseReady = true;
+          console.log('Auth resolved: signed in as', user.email);
+        } else {
+          
+          const page = window.location.pathname;
+          const isAuthPage = page.includes('login.html') || page.includes('signup.html');
+          if (!isAuthPage) {
+            window.location.href = 'login.html';
+          }
+          window.currentUser   = null;
+          window.firebaseReady = true; 
+        }
+      });
+ 
+      window.handleLogout = async () => {
+        try {
+          if (typeof stopAllRealtimeSync === 'function') stopAllRealtimeSync();
+          if (typeof clearAllDataForUser === 'function') clearAllDataForUser();
+          window.currentUser = null;
+          await signOut(auth);
+          window.location.href = 'login.html';
+        } catch (error) {
+          console.error('Logout error:', error);
+        }
+      };
+    </script>
+ 
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
+    <script>
+      
+      if (window.Chart) {
+        window.ChartJS = window.Chart;
+      } else {
+        console.error('Chart.js failed to load — charts will not render');
+      }
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+ 
+    <style type="text/tailwindcss">
+    @layer theme {
+        :root {
+            --primary-color: #e63946;
+            --accent-color: #f5f5f5;
+            --text-color: #333333;
+            --bg-color: #ffffff;
+            --card-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+    }
+ 
+    @layer base {
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+        }
+    }
+ 
+    @layer components {
+        .btn-primary {
+            @apply px-6 py-3 bg-[var(--primary-color)] text-white rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 hover:bg-[#d62839];
+        }
+        
+        .btn-secondary {
+            @apply px-6 py-3 bg-white text-[var(--primary-color)] border-2 border-[var(--primary-color)] rounded-xl font-medium hover:bg-[var(--primary-color)] hover:text-white transition-all duration-300 hover:border-[#d62839];
+        }
+        
+        .card {
+            @apply bg-white rounded-2xl p-6 shadow-lg transition-all duration-300 hover:shadow-xl;
+        }
+        
+        .progress-bar {
+            @apply h-3 rounded-full bg-gradient-to-r from-red-500 to-red-600 transition-all duration-500;
+        }
+    }
+ 
+    @layer utilities {
+        .animate-fade-in {
+            animation: fadeIn 0.6s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .glow {
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
+        }
+ 
+        
+        #firebase-loader {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #fff;
+            z-index: 9999;
+            transition: opacity 0.3s ease;
+        }
+        #firebase-loader.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .loader-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #e63946;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    }
+    </style>
+</head>
+<body>
+    
+    <div id="firebase-loader">
+      <div class="loader-spinner"></div>
+    </div>
+ 
+    <nav id="main-nav" style="display: none;"></nav>
+    <div id="root"></div>
+ 
+    
+    <script type="text/babel" src="utils/currencyFormatter.js"></script>
+    <script type="text/babel" src="utils/budgetRules.js"></script>
+    <script type="text/babel" src="utils/budgetBalancer.js"></script>
+    <script type="text/babel" src="utils/suggestionEngine.js"></script>
+    <script type="text/babel" src="utils/storage.js"></script>
+    <script type="text/babel" src="utils/firestoreSync.js"></script>
+ 
+    <!-- Base UI components -->
+    <script type="text/babel" src="components/SpensaLogo.js"></script>
+    <script type="text/babel" src="components/Alert.js"></script>
+    <script type="text/babel" src="components/Modal.js"></script>
+    <script type="text/babel" src="components/ConfirmModal.js"></script>
+    <script type="text/babel" src="components/Navbar.js"></script>
+ 
+    <!-- Feature components -->
+    <script type="text/babel" src="components/ModeSelector.js"></script>
+    <script type="text/babel" src="components/MonthSelector.js"></script>
+    <script type="text/babel" src="components/IncomeInput.js"></script>
+    <script type="text/babel" src="components/AllocationSelector.js"></script>
+    <script type="text/babel" src="components/BudgetBreakdown.js"></script>
+    <script type="text/babel" src="components/BudgetBreakdownHierarchical.js"></script>
+    <script type="text/babel" src="components/BudgetBreakdownSimple.js"></script>
+    <script type="text/babel" src="components/ExpenseTracker.js"></script>
+    <script type="text/babel" src="components/AddMoneyModal.js"></script>
+    <script type="text/babel" src="components/GoalModal.js"></script>
+    <script type="text/babel" src="components/GoalTracker.js"></script>
+    <script type="text/babel" src="components/ExpectedBudget.js"></script>
+    <script type="text/babel" src="components/Summary.js"></script>
+    <script type="text/babel" src="components/BudgetChart.js"></script>
+    <script type="text/babel" src="components/MonthlyOverview.js"></script>
+    <script type="text/babel" src="components/SmartInsights.js"></script>
+ 
+    <script type="text/babel" src="app.js"></script>
+ 
+    <script>
+      (function waitForFirebase() {
+        if (window.firebaseReady) {
+          const loader = document.getElementById('firebase-loader');
+          if (loader) loader.classList.add('hidden');
+          return;
+        }
+        setTimeout(waitForFirebase, 50);
+      })();
+    </script>
+</body>
+</html>
+ 
